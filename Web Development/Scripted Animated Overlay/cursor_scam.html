@@ -1,0 +1,345 @@
+<!DOCTYPE html lang="en">
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+html, body {margin: 0; padding: 0; height: 100%; width: 100%;}
+
+.row {width: 100%; height: 0px; position: fixed; bottom: 0; right: 0; transition: top 2s ease, bottom 2s ease;}
+.pointer {position: absolute; right: 0; width: 0px; height: 0px;}
+.pointer.attached {transition: left 2s ease, right 2s ease;}
+.cursor {width: 12px; height: 19px; background-image: url('cursor.png'); background-repeat: no-repeat; position: absolute; top: 0; left: 0; z-index: 2;}
+.button {width: 130px; height: 30px; background-image: url('subscribe_button.png'); background-repeat: no-repeat; position: absolute; top: 0; left: 0; transform: translate(-50%, -50%); z-index: 1; opacity: 0;}
+.runner {position: absolute; top: 0; z-index: 3; background-repeat: no-repeat; background-position-y: 0px; background-position-x: 0py; width: 80px; height: 62px;}
+.runner.R {background-image: url('absol_runner_cursor.png'); left: -50px; transform: translate(-50%, -10%);}
+.runner.L {background-image: url('absol_runner_cursor2.png'); right: -50px; transform: translate(50%, -10%);}
+
+.visible {opacity: 1;}
+
+.runningAnim {
+	animation-name: runningAnim;
+	animation-iteration-count: infinite;
+	animation-duration: calc(250ms * 4);
+	animation-timing-function: steps(4);
+}
+@keyframes runningAnim {
+	100% {background-position-x: calc(80px * -4);}
+}
+
+.turnAnim {
+	animation-name: turnAnim;
+	animation-iteration-count: 1;
+	animation-duration: calc(100ms * 2);
+	animation-timing-function: steps(2);
+	animation-fill-mode: forwards;
+	background-position-x: calc(80px * -4);
+}
+@keyframes turnAnim {
+	100% {background-position-x: calc(80px * -4 - 80px * 2)}
+}
+.revTurnAnim {
+	animation-name: revTurnAnim;
+	animation-iteration-count: 1;
+	animation-duration: calc(100ms * 2);
+	animation-timing-function: steps(2);
+	animation-fill-mode: forwards;
+	background-position-x: calc(80px * -6);
+}
+@keyframes revTurnAnim {
+	100% {background-position-x: calc(80px * -4)}
+}
+</style>
+<script>
+var runnerFromLeft = false;
+var targetPos = 0;
+var lastTick = null;
+var animCycle = -1;
+var hasSetup = false;
+
+function rnd_bm() {
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random(); //Converting [0,1) to (0,1)
+  while(v === 0) v = Math.random();
+  let num = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+  num = num / 10.0 + 0.5; // Translate to 0 -> 1
+  if (num > 1 || num < 0) return randn_bm() // resample between 0 and 1
+  return num;
+}
+function rnd(min=0, max=1) {return ~~(Math.random() * (max - min + 1)) + min;}
+
+function randomMoveCursor() {
+	let row = document.getElementById('row');
+	let pointer = document.getElementById('pointer');
+	
+	let x = rnd_bm() * 50; // Bell curve between 0% & 50%, most likely to group around 25%. Fully random, albeit most likely to keep center and border area clean.
+	let y = rnd_bm() * 50;
+	let t = Math.random() >= 0.5; // Determines if we do a top or bottom approach
+	let r = Math.random() >= 0.5; // Determines if we do a left or right
+	
+	if(t) y = 100-y;
+	if(!r) x = 100-x;
+	
+	targetPos = window.visualViewport.width * (x/100);
+	if(r) targetPos = window.visualViewport.width - targetPos;
+	
+	runnerFromLeft = r;
+	
+	moveCursor(x,y);
+	setupRunner();
+}
+function moveCursor(x, y, t=false, r=true) {
+	document.getElementById('row').style[(t?'top':'bottom')] = y+'%';
+	document.getElementById('pointer').style[(r?'right':'left')] = x+'%';
+}
+
+function setupRunner() {
+	let runner = document.getElementById('runner');
+	
+	runner.style.removeProperty('left');
+	runner.style.removeProperty('right');
+	runner.style[(runnerFromLeft?'left':'right')] = '-50px';
+	if(runnerFromLeft) {
+		runner.classList.remove('L');
+		runner.classList.add('R');
+	} else {
+		runner.classList.remove('R');
+		runner.classList.add('L');
+	}
+	
+	runner.classList.remove('turnAnim');
+	runner.classList.remove('revTurnAnim');
+	runner.classList.add('runningAnim');
+}
+
+function showButton() {
+	document.getElementById('button').classList.toggle('visible');
+}
+
+function startRunner() {
+	animCycle = 0;
+}
+function startCleanup() {
+	animCycle = 11;
+	document.getElementById('pointer').classList.remove('attached');
+}
+
+function tickTimer(tick) {
+	if(lastTick == null) lastTick = tick;
+	
+	let dt = tick - lastTick;
+	lastTick = tick;
+	
+	let runnerCurPos = parseFloat(document.getElementById('runner').style[(runnerFromLeft?'left':'right')].match(/^\-?\d+(:?\.\d+)?/));
+	
+	switch(animCycle) {
+		case 0:
+			// Scam start
+			if(runnerCurPos >= targetPos) {
+				animCycle = 1;
+				setTimeout(() => {animCycle = 2;}, 1000);
+				document.getElementById('runner').classList.remove('runningAnim');
+			} else document.getElementById('runner').style[(runnerFromLeft?'left':'right')] = (runnerCurPos + 0.1*dt) + 'px';
+			break;
+		case 2:
+			animCycle = 3;
+			document.getElementById('runner').classList.add('turnAnim');
+			setTimeout(() => {animCycle = 4;}, 2000);
+			break;
+		case 4:
+			animCycle = 5;
+			showButton();
+			setTimeout(() => {animCycle = 6;}, 1500);
+			break;
+		case 6:
+			animCycle = 7;
+			document.getElementById('runner').classList.remove('turnAnim');
+			document.getElementById('runner').classList.add('revTurnAnim');
+			setTimeout(() => {animCycle = 8;}, 1500);
+			break;
+		case 8:
+			animCycle = 9;
+			document.getElementById('runner').classList.remove('revTurnAnim');
+			document.getElementById('runner').classList.add('runningAnim');
+			break;
+		case 9:
+			if(runnerCurPos >= (window.visualViewport.width + 50)) {
+				animCycle = 10;
+			} else document.getElementById('runner').style[(runnerFromLeft?'left':'right')] = (runnerCurPos + 0.1*dt) + 'px';
+			break;
+		case 11:
+			// Cleanup start
+			if(runnerCurPos >= targetPos) {
+				animCycle = 12;
+			} else document.getElementById('runner').style[(runnerFromLeft?'left':'right')] = (runnerCurPos + 0.15*dt) + 'px';
+			break;
+		case 12:
+			if(runnerCurPos >= (window.visualViewport.width + 100)) animCycle = 10;
+			else {
+				runnerCurPos = (runnerCurPos + 0.15*dt);
+				document.getElementById('runner').style[(runnerFromLeft?'left':'right')] =  runnerCurPos+'px';
+				document.getElementById('pointer').style['right'] = (runnerFromLeft ? window.visualViewport.width - runnerCurPos : runnerCurPos)+'px';
+			}
+			break;
+		case 13:
+			showButton();
+			animCycle = 14;
+			break;
+	}
+	
+	requestAnimationFrame(tickTimer);
+}
+
+class WebSocketHandler {
+	wsAttemptConnect = true;
+	wsConnectTimer = 0;
+	wsAttemptCount = 0;
+	lastTick = null;
+	ws = null;
+	
+	#_requestId = "";
+	
+	constructor(id="cursorScam") {
+		this.#_requestId = id;
+		
+		this._boundTick = this.tick.bind(this);
+		this._boundWsOpen = this.wsOpen.bind(this);
+		this._boundWsError = this.wsError.bind(this);
+		this._boundWsClose = this.wsClose.bind(this);
+		this._boundWsMessage = this.wsMessage.bind(this);
+		
+		this._tickId = window.requestAnimationFrame(this._boundTick);
+	}
+	
+	destroy() {
+		window.cancelAnimationFrame(this._tickId);
+		if(this.ws && this.ws.readyState != WebSocket.CLOSED) this.ws.close(1000);
+	}
+
+	tick(t) {
+		if(!this.lastTick) this.lastTick = t;
+		let dt = t - this.lastTick;
+		this.lastTick = t;
+		
+		if(this.wsAttemptConnect) {
+			this.wsConnectTimer -= dt;
+			if(this.wsConnectTimer <= 0) this.connectWs();
+		}
+		
+		this._tickId = window.requestAnimationFrame(this._boundTick);
+	}
+
+	connectWs() {
+		this.wsAttemptConnect = false;
+		this.wsConnectTimer = 10000;
+		if(this.ws != null && this.ws.readyState != WebSocket.CLOSED) this.ws.close(1000);
+		
+		try {
+			this.ws = new WebSocket("ws://localhost:8080/fireworks");
+			this.ws.onopen = this._boundWsOpen;
+			this.ws.onerror = this._boundWsError;
+			this.ws.onclose = this._boundWsClose;
+			this.ws.onmessage = this._boundWsMessage;
+		} catch(e) {
+			console.error("WebSocket connection failed due to unknown error!", e);
+		}
+	}
+
+	wsOpen(e) {
+		this.wsAttemptCount = 0;
+		console.info("WebSocket connected!", e);
+		this.ws.send(JSON.stringify({"request": "Subscribe", "id": this.#_requestId, "events": {"General": ["Custom"]}}));
+		if(!hasSetup) {
+			randomMoveCursor();
+			hasSetup = true;
+		}
+	}
+
+	wsError(e) {
+		console.warn("WebSocket errored!", e);
+	}
+
+	wsClose(e) {
+		let code = e.code;
+		if(e.code == 1000 || e.code == 1001) {
+			console.info("WebSocket connection closed normally!", e);
+		} else {
+			console.error("WebSocket connection terminated due to error!", e);
+			this.wsAttemptCount++;
+			if(this.wsAttemptCount <= 10) {
+				this.wsAttemptConnect = true;
+				console.info("Attempting reconnect in "+((this.wsConnectTimer || 1)/1000).toFixed(2)+"s ...", "Attempt: "+this.wsAttemptCount);
+			} else console.error("(Re)connection attempt limit reached! Aborting.");
+		}
+	}
+
+	wsMessage(e) {
+		if(!e.data) return;
+		let data = null;
+		try{data = JSON.parse(e.data);} catch(e){return;}
+		console.debug("WebSocket received message!", e);
+		
+		if(data.id && data.id == this.#_requestId) {
+			console.info("WebSocket received relevant status message!");
+			if(data.status != "ok") {
+				console.warn("WebSocket received non-ok status message!", data);
+				return;
+			}
+		} if(data.event) {
+			let event = data.event || {}, source = event.source, type = event.type;
+			if((source == "None" || source == "General") && type == "Custom") this.handleAction(data);
+			else return;
+		}
+	}
+	
+	send(args, data) {
+		let request = {"request": "DoAction", "id": this.#_requestId, "action": {"id": "<REMOVED>"}, "args": {}};
+		if(typeof(args) == "string") args = [args];
+		if(typeof(data) == "string") data = [data];
+		for(let i = 0; i < args.length; i++) {
+			request.args[args[i]] = data[i] || null;
+		}
+		console.debug("Sending request:", request);
+		try {this.ws.send(JSON.stringify(request));} catch(e) {console.warn("WebSocket could not send custom request!", e.message);}
+	}
+	
+	handleAction(data) {
+		console.info("WebSocket received action message!", data);
+		let payload = data.data, action = payload.action, param = payload.data;
+		switch(action) {
+			case 'showScam': if(animCycle == -1) {console.log("ZOOMIES"); startRunner();} break;
+			case 'cleanScam': if(animCycle == 10) {console.log("CLEANUP"); setupRunner(); startCleanup();}  break;
+			default: return; break;
+		}
+	}
+}
+
+var ws = null;
+document.addEventListener('DOMContentLoaded', function() {
+	requestAnimationFrame(tickTimer);
+	document.body.addEventListener('click', function() {
+		if(animCycle == -1) {
+			console.log("ZOOMIES");
+			startRunner();
+		} else if(animCycle == 10) {
+			console.log("CLEANUP");
+			setupRunner();
+			startCleanup();
+		}
+	});
+	ws = new WebSocketHandler();
+});
+window.addEventListener('beforeunload', function(e){
+	if(ws != null) try {ws.destroy(); ws = null;} catch(e) {console.warn("WebSocket could not be destroyed!", e.message);}
+});
+</script>
+</head>
+<body>
+<div class="row" id="row">
+	<div class="pointer attached" id="pointer">
+		<div class="button" id="button"></div>
+		<div class="cursor" id="cursor"></div>
+	</div>
+	<div class="runner R runningAnim" id="runner"></div>
+</div>
+</body>
+</html>

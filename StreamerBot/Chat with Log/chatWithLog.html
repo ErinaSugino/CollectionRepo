@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet" type="text/css">
+<title>Local Chat with Backlog</title>
+<script>
+var _isFresh = true;
+const defaultTwitchColors = ['#FF4A80','#FF7070','#FA8E4B','#FEE440','#5FFF77','#00F5D4','#00BBF9','#4371FB','#9B5DE5','#F670DD'];
+var userColorCache = {};
+class Chat {
+	wsAttemptConnect = true;
+	wsConnectTimer = 0;
+	lastTick = null;
+	ws = null;
+	maxMessages = 50;
+	
+	#_requestId = "";
+	
+	// Core Functions
+	constructor(id="chatWidget") {
+		this.#_requestId = id;
+		
+		this._boundTick = this.tick.bind(this);
+		this._boundWsOpen = this.wsOpen.bind(this);
+		this._boundWsError = this.wsError.bind(this);
+		this._boundWsClose = this.wsClose.bind(this);
+		this._boundWsMessage = this.wsMessage.bind(this);
+		
+		this._tickId = window.requestAnimationFrame(this._boundTick);
+		
+		this._boundOnFade = this.onFade.bind(this);
+		document.getElementById('chat').addEventListener('animationend', this._boundOnFade);
+	}
+	
+	destroy() {
+		window.cancelAnimationFrame(this._tickId);
+		if(this.ws && this.ws.readyState != WebSocket.CLOSED) this.ws.close(1000);
+		document.getElementById('chat').removeEventListener('animationend', this._boundOnFade);
+	}
+
+	tick(t) {
+		if(!this.lastTick) this.lastTick = t;
+		let dt = t - this.lastTick;
+		this.lastTick = t;
+		
+		if(this.wsAttemptConnect) {
+			this.wsConnectTimer -= dt;
+			if(this.wsConnectTimer <= 0) this.connectWs();
+		}
+		
+		this._tickId = window.requestAnimationFrame(this._boundTick);
+	}
+	
+	onFade(e) {
+		if(e.animationName != "fadeOut") return;
+		
+		e.target.remove();
+	}
+	
+	// WebSocket Functions
+	connectWs() {
+		this.wsAttemptConnect = false;
+		this.wsConnectTimer = 1000;
+		if(this.ws != null && this.ws.readyState != WebSocket.CLOSED) {console.debug("Old connection still active - sending close"); this.ws.close(1000);}
+		
+		try {
+			console.debug("Attempting connection...");
+			this.ws = new WebSocket("ws://localhost:9090/chat");
+			this.ws.onopen = this._boundWsOpen;
+			this.ws.onerror = this._boundWsError;
+			this.ws.onclose = this._boundWsClose;
+			this.ws.onmessage = this._boundWsMessage;
+		} catch(e) {
+			console.error("WebSocket connection failed due to unknown error!", e);
+		}
+	}
+
+	wsOpen(e) {
+		console.info("WebSocket connected!", e);
+		this.ws.send(JSON.stringify({"request": "Subscribe", "id": this.#_requestId, "events": {"General": ["Custom"]}}));
+	}
+
+	wsError(e) {
+		console.warn("WebSocket errored!", e);
+	}
+
+	wsClose(e) {
+		let code = e.code;
+		if(e.code == 1000 || e.code == 1001) console.info("WebSocket connection closed normally!", e);
+		else console.error("WebSocket connection terminated due to error!", e);
+		this.wsAttemptConnect = true;
+		console.debug("Attempting reconnect in "+((this.wsConnectTimer || 1)/1000).toFixed(2)+"s ...");
+	}
+
+	wsMessage(e) {
+		if(!e.data) return;
+		let payload = null;
+		try{payload = JSON.parse(e.data);} catch(e){return;}
+		console.debug("WebSocket received message!", payload, e);
+		
+		if(payload.id && payload.id == this.#_requestId) {
+			console.info("WebSocket received relevant status message!");
+			if(payload.status != "ok") {
+				console.warn("WebSocket received non-ok status message!", data);
+				return;
+			}
+		}
+		if(payload.event) {
+			let event = payload.event ?? "", data = payload.data;
+			switch(event) {
+				case 'backlog': this.handleBacklog(data); break;
+				case 'chatMessage': this.handleMessage(data); break;
+				case 'deleteMessage': this.handleDelete(data); break;
+				case 'chatClear': this.handleClear(); break;
+				case 'chatBan': this.handleTimeout(data); break;
+				default: return; break;
+			}
+		}
+	}
+	
+	wsSend(args, data) {
+		let request = {"request": "DoAction", "id": this.#_requestId, "action": {"id": "4a6b365a-45a9-4ad0-b894-2a060f8a4921"}, "args": {}};
+		if(typeof(args) == "string") args = [args];
+		if(typeof(data) == "string") data = [data];
+		for(let i = 0; i < args.length; i++) {
+			request.args[args[i]] = data[i] || null;
+		}
+		console.debug("Sending request:", request);
+		try {this.ws.send(JSON.stringify(request));} catch(e) {console.warn("WebSocket could not send custom request!", e.message);}
+	}
+	
+	// Chat Functions
+	handleBacklog(log) {
+		// Clear chat first
+		this.handleClear();
+		
+		if(!Array.isArray(log)) return;
+		for(let i = 0; i < Math.min(log.length, this.maxMessages); i++) {
+			//Parse backwards, cause oldest messages first. Might improve backend sided later.
+			this.handleMessage(log[i], true);
+		}
+	}
+	
+	handleMessage(message, isBacklog=false) {
+		if(typeof message != 'object') return;
+		
+		let shortcutFade = 0;
+		// Is message older than our fadeOut time?
+		if(Settings.fadeTime > 0) {
+			let curTime = ~~(Date.now()/1000);
+			let oldTime = message.timestamp ?? curTime;
+			let age = curTime - oldTime;
+			
+			if(curTime - oldTime >= Settings.fadeTime) return;
+			
+			shortcutFade = Settings.fadeTime - age;
+		}
+		
+		if(message.color == null) {
+			if(!userColorCache[message.userId]) {
+				// Fetch random default color for this user for this session, for if they do not have their own color set
+				userColorCache[message.userId] = defaultTwitchColors[~~((Math.random()*(defaultTwitchColors.length)))];
+			}
+			message.color = userColorCache[message.userId];
+		}
+		
+		let mElem = this.parseTemplate("t_chatMessage", message);
+		
+		if(message.emotes && message.emotes.length > 0) {
+			try {
+				// Reverse replace emotes in text
+				let emotes = message.emotes;
+				let text = message.message;
+				for(let i = emotes.length - 1; i >= 0; i--) {
+					let e = emotes[i];
+					let emoteHtml = `<span class="emote" style="background-image: url(${e.url})"><img src="${e.url}"></span>`;
+					text = this.substringReplace(text, e.start, e.end, emoteHtml);
+				}
+				mElem.querySelector('.message').innerHTML = text;
+			} catch(err){console.error("Could not parse emotes for message!", err);}
+		}
+		
+		if(message.badges && message.badges.length > 0) {
+			try {
+				let badges = message.badges;
+				for(let i = 0; i < badges.length; i++) {
+					let b = badges[i];
+					let img = this.parseTemplate('t_badge', {url: b, type: 'twitch'});
+					mElem.querySelector('.badges').append(img);
+				}
+			} catch(err){console.error("Could not apply badges for message!", err);}
+		}
+		
+		if(isBacklog) {
+			//Append shortened fadeOut times only on backlog fetch to reduce clutter
+			mElem.style.setProperty('--fadeDelay', shortcutFade+'s');
+		}
+		
+		let chat = document.getElementById('chat');
+		chat.append(mElem);
+		// Adhere max message limit
+		if(chat.children.length > this.maxMessages) chat.children[0].remove();
+	}
+	
+	handleDelete(id) {
+		if(typeof id != 'string') return;
+		
+		let messages = document.querySelectorAll('div[data-id='+id+']');
+		for(let i = 0; i < messages.length; i++) {messages[i].remove();}
+	}
+	
+	handleClear() {
+		document.getElementById('chat').innerHTML = '';
+	}
+	
+	handleTimeout(data) {
+		if(typeof data != 'object') return;
+		if(!data.userId || typeof data.userId != 'string') return;
+		
+		let messages = document.querySelectorAll('div[data-from='+data.userId+']');
+		for(let i = 0; i < messages.length; i++) {messages[i].remove();}
+	}
+	
+	// Utility Functions
+	parseTemplate(id, parseData = {}) {
+		let template = document.getElementById(id);
+		if(template == null) return null;
+		
+		let html = template.innerHTML;
+		html = html.replaceAll(/\{(.+?)\}/g, function(m, m1) {
+			return parseData[m1] ?? "";
+		});
+		
+		let dom = new DOMParser().parseFromString(html, "text/html");
+		let clone = document.importNode(dom.body.children[0], true);
+		
+		return clone;
+	}
+	
+	substringReplace(s, i, n, r) {
+		return s.substring(0,i)+r+s.substring(n+1);
+	}
+}
+</script>
+<script>
+var _ws = null;
+var Settings = {
+	maxMessages: 50,
+	fadeTime: -1,
+	textColor: '#FAFAFA',
+	fontSize: 32,
+	isHorizontal: false
+};
+
+function loadSettings() {
+	let urlSettings = new URLSearchParams(window.location.search);
+	let style = document.documentElement.style;
+	let t;
+	for(let [k,v] of urlSettings) {
+		switch(k) {
+			case 'maxMessages': case 'max': case 'm': t = parseInt(v)||50; Settings.maxMessages = t; break;
+			case 'fadeTime': case 'fade': case 'f': t = parseInt(v)||0; Settings.fadeTime = t; break;
+			case 'textColor': case 'color': case 'c': Settings.textColor = v; break;
+			case 'fontSize': case 'size': case 's': t = parseInt(v)||32; Settings.fontSize = t; break;
+			case 'horizontal': case 'h': Settings.isHorizontal = true; break;
+			default: break;
+		}
+	}
+}
+
+document.addEventListener('DOMContentLoaded', function(e) {
+	loadSettings();
+	
+	let root = document.documentElement.style;
+	if(Settings.fadeTime > 0) {
+		root.setProperty('--fadeDelay', Settings.fadeTime+'s');
+		root.setProperty('--playState', 'running');
+	}
+	root.setProperty('--textColor', Settings.textColor);
+	root.setProperty('--fontSize', Settings.fontSize+'px');
+	if(Settings.isHorizontal) {
+		document.getElementById('chat').classList.add('horizontal');
+	}
+	
+	_ws = new Chat(Settings.maxMessages);
+});
+</script>
+<style>
+:root {
+	--fadeDelay: 99999999s;
+	--playState: paused;
+	--textColor: #FAFAFA;
+	--fontSize: 32px;
+}
+
+html, body {height: 100%; overflow: hidden;}
+body {font-size: var(--fontSize, 32px); color: var(--textColor, #FAFAFA);}
+
+.colon, .name {height: 24px;}
+#chat {font: 0.8em "Helvetica Neue", Helvetica, Arial, sans-serif; position: absolute; bottom: 0; left: 0; padding: 0 10px 10px; width: 100%; box-sizing: border-box;}
+#chat > div {padding-bottom: 0.4em; animation: fadeOut 1s ease var(--fadeDelay, 99999999s) forwards; -webkit-animation: fadeOut 1s ease var(--fadeDelay, 99999999s) forwards; word-wrap: break-word; animation-play-state: var(--playState, paused);}
+#chat > div.deleted {visibility: hidden;}
+#chat .emote {background-repeat: no-repeat; background-position: center; background-size: contain; position: relative; padding: 4px;}
+#chat .emote img {display: inline-block; height: 1em; opacity: 0;}
+.badge, .colon, .name {display: inline-block; vertical-align: top;}
+#chat .meta {padding-right: 4px; position: relative;}
+.badge {margin-right: 4px; height: 1em;}
+.name {font-weight: 700; margin-left: 0.1em;}
+
+#chat.horizontal {display: flex; flex-direction: row; bottom: unset; top: 0;}
+#chat.horizontal > div {flex-shrink: 0; flex-grow: 0; word-wrap: normal; white-space: nowrap; padding-bottom: unset; padding-top: 0.4em;}
+#chat.horizontal > div:nth-of-type(n+2) {padding-left: 0.6em;}
+
+@-webkit-keyframes fadeOut {
+	0% {opacity:1} to {opacity:0}
+}
+@keyframes fadeOut {
+	0% {opacity:1} to {opacity:0}
+}
+</style>
+</head>
+<body>
+<div id="chat" class="chat"></div>
+</body>
+<template id="t_chatMessage">
+	<div data-from="{userId}" data-id="{msgId}">
+		<span class="meta" style="color: {color}">
+			<span class="badges"></span><span class="name">{user}</span>
+		</span>
+
+		<span class="message">{message}</span>
+	</div>
+</template>
+<template id="t_badge">
+	<img src="{url}" class="badge {type}-icon" />
+</template>
+</html>

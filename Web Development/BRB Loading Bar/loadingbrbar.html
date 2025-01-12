@@ -1,0 +1,302 @@
+<!DOCTYPE html lang=en>
+<html>
+<head>
+<meta charset="utf-8" />
+<script>
+/**
+ * Copyright 2023 Rainbow Fresh
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software 
+ * and associated documentation files (the “Software”), to deal in the Software without restriction, 
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, 
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+ * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+ * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+ * FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ **/
+
+/* EDIT THIS TO CHANGE TEXTS */
+const pool = [
+	"Consuming sustenance",
+	"Finally petting that cat",
+	"Aquiring hydration",
+	"Stretching those limbs",
+	"Secretly still at the PC",
+	"Gone to get milk",
+	"Running after catgirls",
+	"Fallen into the toilet",
+	"Tip: Enjoy your break!",
+	"Tip: Like and subscwibe"
+];
+// rarePool is for messages that only rarely are used
+const rarePool = [
+	"BUY MY MERCH!",
+	"The Wiggle is eternal!"
+];
+// poolEnd is the text displayed when the bar is full
+const poolEnd = "Finalizing break - please standby";
+/* STOP EDITING */
+var remainingTime = 60000*15;
+var fullTime = 60000*15;
+var textTimer = 1500;
+var textTimerFull = 5000;
+var completion = 0;
+var preCompletion = 0;
+var animDone = false;
+var finalText = false;
+var lastTick = null;
+var lastText = -1;
+
+function tickTimer(tick) {
+	if(lastTick == null) lastTick = tick;
+	
+	let dt = tick - lastTick;
+	lastTick = tick;
+	
+	if(!animDone) {
+		remainingTime -= dt;
+		animationStep();
+	}
+	
+	if(!finalText) {
+		textTimer -= dt;
+		if(textTimer <= 0) {
+			rollText();
+			textTimer = textTimerFull;
+		}
+	}
+	
+	if(!animDone || !finalText) requestAnimationFrame(tickTimer);
+}
+
+function animationStep() {
+	let bar = document.getElementById('bar');
+	let runner = document.getElementById('runner');
+	let timer = document.getElementById('timer');
+	
+	if(remainingTime <= 0) {
+		runner.classList.remove('runningAnim');
+		runner.classList.add('sleepAnim');
+		bar.style['width'] = "100%";
+		timer.innerText = "00:00";
+		animDone = true;
+		return;
+	}
+	
+	let timeLeft = Math.max(0, remainingTime);
+	let minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+	let seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+	timer.innerText = minutes.toString().padStart(2,0)+':'+seconds.toString().padStart(2,0);
+	
+	completion = 1 - remainingTime / fullTime;
+	let progress = Math.max(Math.min((preCompletion + ((1 - preCompletion) * completion)), 1), 0) * 100;
+	bar.style['width'] = progress+'%';
+}
+
+function rollText() {
+	let parent = document.getElementById("textbox");
+	if(parent.children.length > 0) {
+		for(let i = 0; i < parent.children.length; i++) {
+			let elem = parent.children[i];
+			elem.style['animation-name'] = "rollOut";
+			elem.addEventListener('animationend', (e) => {e.target.remove();});
+		}
+	}
+	
+	let elem = document.createElement("span");
+	let text = "";
+	if(animDone) {
+		finalText = true;
+		text = poolEnd;
+		elem.classList.add("final_text");
+	} else {
+		let id = -1;
+		if(Math.random() <= 0.1) {
+			do {
+				id = ~~(Math.random()*((rarePool.length-1)+1));
+			} while(rarePool.length > 1 && id == lastText);
+			text = rarePool[id];
+		} else {
+			do {
+				id = ~~(Math.random()*((pool.length-1)+1));
+			} while(pool.length > 1 && id == lastText);
+			text = pool[id];
+			lastText = id;
+		}
+	}
+	
+	elem.innerText = text;
+	parent.append(elem);
+}
+
+function loadSettings() {
+	let settings = new URLSearchParams(window.location.search);
+	let style = document.documentElement.style;
+	for(let [k,v] of settings) {
+		switch(k) {
+			case 'color': case 'c': if(v != '') style.setProperty('--color_text', v); break;
+			case 'accent1': case 'a1': if(v != '') style.setProperty('--color_main', v); break;
+			case 'accent2': case 'a2': if(v != '') style.setProperty('--color_sub', v); break;
+			case 'border': case 'b': if(v != '') style.setProperty('--color_border', v); break;
+			case 'contrast': case 'ct': if(v != '') style.setProperty('--color_contrast', v); break;
+			case 'runner': case 'r': if(v != '') style.setProperty('--runner_icon', 'url("'+v+'")'); break;
+			case 'runnerWidth': case 'rw': if(v != '') style.setProperty('--runner_width', v); break;
+			case 'runnerHeight': case 'rh': if(v != '') style.setProperty('--runnerHeight', v); break;
+			case 'runningFrames': case 'rf': if(v != '') style.setProperty('--running_steps', v); break;
+			case 'sleepingFrames': case 'sf': if(v != '') style.setProperty('--sleeping_steps', v); break;
+			case 'runningSpeed': case 'rs': if(v != '') style.setProperty('--running_speed', v); break;
+			case 'sleepingSpeed': case 'ss': if(v != '') style.setProperty('--sleeping_speed', v); break;
+			case 'timer': case 't': if(v != '') {v = (parseInt(v)||900) * 1000; remainingTime = v; fullTime = v;} break;
+			case 'textTimer': case 'tt': if(v != '') {v = (parseInt(v)||5) * 1000; textTimerFull = v;} break;
+			default: break;
+		}
+	}
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+	loadSettings();
+	requestAnimationFrame(tickTimer);
+	document.body.addEventListener('click', function() {
+		
+		remainingTime = Math.min(remainingTime, 30000);
+		fullTime = remainingTime;
+		preCompletion = completion;
+		console.log("ZOOMIES");
+	}, {once: true});
+});
+</script>
+<style>
+	html, body {margin: 0; padding: 0; height: 225px; font-family: Audiowide, cursive; color: var(--color_text, #f5b500);}
+	
+	.title {
+		font-size: 36px;
+		font-weight: 800;
+		text-shadow: -2px -2px 0 var(--color_border, #666), 2px -2px 0 var(--color_border, #666), -2px 2px 0 var(--color_border, #666), 2px 2px 0 var(--color_border, #666);
+		text-align: center;
+		margin-top: 50px;
+	}
+	
+	.bar_outer {
+		position: relative;
+		margin: 25px 50px;
+		border: 4px solid var(--color_border, #666);
+		height: 25px;
+		background-color: rgba(0,0,0,0.5)
+	}
+	.bar_inner {
+		background: linear-gradient(90deg, var(--color_main, rgba(245,181,0,1)) 0%, var(--color_sub, rgba(255,35,35,1)) 100%);
+		background-size: 100vw 100%;
+		position: absolute;
+		top: 0; bottom: 0;
+		left: 0;
+		min-width: 0px; max-width: 100%;
+		width: 0%;
+	}
+	.runner {
+		position: relative;
+		width: var(--runner_width, 80px); height: var(--runner_height, 50px);
+		float: right;
+		transform: translate(50%, calc(calc(var(--runner_height, 50px) - 25px) / 2 * -1));
+		background-image: var(--runner_icon, none);
+		background-repeat: no-repeat;
+		background-position-x: 0px;
+		background-position-y: 0px;
+		z-index: 1;
+	}
+	.timer {
+		color: var(--color_contrast, #E8E8E8);
+		text-shadow: -2px -2px 0 var(--color_border, #666), 2px -2px 0 var(--color_border, #666), -2px 2px 0 var(--color_border, #666), 2px 2px 0 var(--color_border, #666);
+		font-szie: 18px;
+		line-height: 25px;
+		position: absolute;
+		top: 0; bottom: 0;
+		left: 0; right: 0;
+		text-align: center;
+	}
+	
+	.loading_text {
+		position: relative;
+		font-weight: 600;
+		font-size: 24px;
+		text-shadow: -2px -2px 0 var(--color_border, #666), 2px -2px 0 var(--color_border, #666), -2px 2px 0 var(--color_border, #666), 2px 2px 0 var(--color_border, #666);
+	}
+	.loading_text > span {
+		display: inline-block;
+		position: absolute;
+		left: 0; right: 0;
+		top: -50px;
+		opacity: 0;
+		animation: rollIn 1s ease forwards 1;
+		text-align: center;
+		transform: translateY(-50%);
+	}
+
+	@keyframes rollIn {
+		0%{
+			top: -25px;
+			opacity: 0;
+			transform: rotateX(-90deg);
+		}
+		100%{
+			top: 0px;
+			transform: rotateX(0deg);
+			opacity: 1;
+		}
+	}
+	@keyframes rollOut {
+		0%{
+			top: 0px;
+			transform: rotateX(0deg);
+			opacity: 1;
+		}
+		100%{
+			top: 25px;
+			opacity: 0;
+			transform: rotateX(90deg);
+		}
+	}
+	.runningAnim {
+		animation-name: runningAnim;
+		animation-iteration-count: infinite;
+		animation-duration: calc(var(--running_speed, 250ms) * var(--running_steps, 4));
+		animation-timing-function: steps(var(--running_steps, 4));
+	}
+	@keyframes runningAnim {
+		100% {background-position-x: calc(var(--runner_width, 80px) * -1 * var(--running_steps, 4));}
+	}
+	.sleepAnim {
+		animation-name: sleepAnim;
+		animation-iteration-count: infinite;
+		animation-duration: calc(var(--sleeping_speed, 1000ms) * var(--sleeping_steps, 2));
+		animation-timing-function: steps(var(--sleeping_steps, 2));
+		background-position-x: calc(var(--runner_width, 80px) * -1 * var(--running_steps, 4));
+	}
+	@keyframes sleepAnim {
+		100% {background-position-x: calc(var(--runner_width, 80px) * -1 * var(--running_steps, 4) - calc(var(--runner_width, 80px) * var(--sleeping_steps, 2)));}
+	}
+	
+	.final_text {animation: glow 3000ms linear infinite 500ms;}
+	@keyframes glow {
+	  40% {
+		text-shadow: 0 0 8px #fff;
+	  }
+	}
+</style>
+</head>
+<body>
+<div class="title">Break In Progress</div>
+<div class="bar_outer">
+	<div class="bar_inner" id="bar">
+		<div class="runner runningAnim" id="runner"></div>
+	</div>
+	<div class="timer" id="timer">15:00</div>
+</div>
+<div class="loading_text" id="textbox"></div>
+</body>
+</html>

@@ -1,0 +1,359 @@
+@import url('https://fonts.googleapis.com/css?family=Righteous&display=swap');
+
+html, body {
+  margin: 0;
+  text-align: left;
+  height: 100%;
+  overflow: hidden;
+  font-size: 16px;
+}
+
+.main {
+  font-family: Righteous;
+  text-transform: uppercase;
+  line-height: 1;
+  position: absolute;
+  top: 0px; left: 0px; right: 0px; bottom: 0px;
+  overflow: hidden;
+}
+.color_slash{
+  color: #900;
+}
+
+.light {font-weight: 300;}
+.bold {font-weight: 700;}
+.right {text-align: right;}
+
+#slash {
+  width: 100%;
+  height: 4em;
+  position: absolute;
+}
+
+#slash div {
+  display: inline-block;
+  position: absolute;
+  font-size: 4em;
+  opacity: 0;
+  width: 32px;
+  text-align: center !important;
+}
+
+
+.box {
+  display: none;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+.title-box {
+  position: relative;
+  width: 100%;
+  height: 4em;
+}
+
+.title-box div {
+  position: relative;
+}
+
+.content {
+	padding-left: 25px;
+	height: 100%;
+	box-sizing: border-box;
+	overflow: hidden;
+	position: relative;
+}
+.box.right .content {padding-left: 0px; padding-right: 45px;}
+
+.mover {
+	position: relative;
+	top: -100%;
+}
+
+.mover > div {
+	font-size: 1em;
+	color: white;
+	padding-right: 5px;
+	padding-bottom: 2px;
+}
+.mover div.bold {font-size: 1.25em; color: darkgoldenrod;}
+
+.mask {
+  overflow: hidden;
+  text-shadow: 2px 2px 3px #000000;
+  transform: skew(-20deg);
+}
+
+.play, .stop {display: block;}
+.box.play, .box.stop, .box.visible {display: inline-block;}
+
+
+.title-box > div:nth-child(1), 
+.title-box > div:nth-child(2) {
+  font-size: 1.5em;
+  height: 1em;
+  width: 100%;
+  max-width: calc(100% - 35px);
+}
+
+.box.left .title-box > div:nth-child(1) {
+  top: 6px;
+  left: 35px;
+  color: #900;
+}
+
+.box.left .title-box > div:nth-child(2) {
+  top: 6px;
+  left: 25px;
+  color: white;
+}
+
+.box.right .title-box > div:nth-child(1) {
+  top: 6px;
+  right: 0px;
+  color: #900;
+}
+
+.box.right .title-box > div:nth-child(2) {
+  top: 6px;
+  right: 10px;
+  color: white;
+}
+
+/*********************
+* Animation
+*********************/
+@keyframes anim-slash-start-left {
+  0% {
+    opacity: 0;
+    left: calc(100% - 32px);
+  }
+  10% {
+    opacity: 0;
+    left: calc(100% - 32px);
+  }
+  45% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+	left: 0px;
+  }
+  100%{
+    opacity: 1;
+    left: 0px;
+  }
+}
+
+@keyframes anim-slash-start-right {
+  0% {
+    opacity: 0;
+    right: calc(100% - 32px);
+  }
+  10% {
+    opacity: 0;
+    right: calc(100% - 32px);
+  }
+  45% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+	right: 0px;
+  }
+  100%{
+    opacity: 1;
+    right: 0px;
+  }
+}
+
+@keyframes anim-slash-right {
+  0% {
+    opacity: 1;
+    right: calc(100% - 32px);
+  }
+  10% {
+    right: calc(100% - 32px);
+  }
+  90% {
+    right: 0px;
+  }
+  100% {
+    opacity: 1;
+    right: 0px;
+  }
+}
+
+@keyframes anim-slash-left {
+  0% {
+    opacity: 1;
+    left: calc(100% - 32px);
+  }
+  10% {
+    left: calc(100% - 32px);
+  }
+  90% {
+    left: 0px;
+  }
+  100% {
+    opacity: 1;
+    left: 0px;
+  }
+}
+
+@keyframes anim-slash-end-right {
+  0% {
+    opacity: 1;
+    right: calc(100% - 32px);
+  }
+  25% {
+    opacity: 1;
+    right: calc(100% - 32px);
+  }
+  45% {
+    opacity: 0;
+  }
+  50% {
+    right: 0px;
+  }
+}
+
+@keyframes anim-slash-end-left {
+  0% {
+    opacity: 1;
+    left: calc(100% - 32px);
+  }
+  25% {
+    opacity: 1;
+    left: calc(100% - 32px);
+  }
+  45% {
+    opacity: 0;
+  }
+  50% {
+    left: 0px;
+  }
+}
+
+
+
+#slash.play.left.start > div {
+  animation: 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-start-left;
+}
+#slash.play.right.start > div {
+  animation: 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-start-right;
+}
+
+#slash.play.right > div {
+  animation: 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-right;
+}
+#slash.play.left > div {
+  animation: 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-left;
+}
+
+#slash.play.left.end > div {
+  animation: 5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-end-left;
+}
+#slash.play.right.end > div {
+  animation: 5s cubic-bezier(0.19, 0.76, 0.32, 1) 1 normal forwards anim-slash-end-right;
+}
+
+
+@keyframes anim-text-left-top {
+  0% {
+    left: -100%;
+  }
+  65% {
+    left: 5px;
+  }
+  100% {
+    left: 5px;
+  }  
+}
+
+@keyframes anim-text-left-bottom {
+  0% {
+    left: -100%;
+  }
+  75% {
+    left: 5px;
+  }
+  100% {
+    left: 5px;
+  }
+}
+
+@keyframes anim-text-right-top {
+  0% {
+    right: -100%;
+  }
+  65% {
+    right: 5px;
+  }
+  100% {
+    right: 5px;
+  }
+}
+
+@keyframes anim-text-right-bottom {
+  0% {
+    right: -100%;
+  }
+  75% {
+    right: 5px;
+  }
+  100% {
+    right: 5px;
+  }
+}
+
+
+.box.play .title-box > div:nth-child(1) div, 
+.box.play .title-box > div:nth-child(2) div {
+  animation: 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 2 alternate both;
+}
+
+.box.left .title-box > div:nth-child(1) div {
+  animation-name: anim-text-left-top;
+}
+
+.box.left .title-box > div:nth-child(2) div {
+  animation-name: anim-text-left-bottom;
+}
+
+.box.right .title-box > div:nth-child(1) div {
+  animation-name: anim-text-right-top;
+}
+
+.box.right .title-box > div:nth-child(2) div {
+  animation-name: anim-text-right-bottom;
+}
+
+.box.paused div {animation-play-state: paused !important;}
+
+@keyframes anim-content-open {
+	0% {
+		top: -100%;
+	}
+	75% {
+		top: -100%;
+	}
+	100% {
+		top: 0px;
+	}
+}
+
+.box.play .mover {
+	animation: anim-content-open 1.5s cubic-bezier(0.19, 0.76, 0.32, 1) 2 alternate both;
+}
+
+.error {
+	display: inline-block;
+	position: fixed;
+	top: 50%; left: 50%;
+	transform: translate(-50%, -50%);
+	font-size: 48px;
+	font-weight: bold;
+	font-family: Righteous;
+	color: red;
+}
